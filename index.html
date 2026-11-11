@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Colorea el mapa: problemas de satisfacción de restricciones</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F1F4F1; --surface:#FFFFFF; --ink:#1D2827; --muted:#56635F; --rule:#CBD5D0;
+  --empty:#E4E8E3; --rojo:#D1495B; --verde:#5E9C76; --azul:#3B7EA1; --amarillo:#E0B83A; --bad:#E8792E; --focus:#B07D12;
+  color-scheme:light; box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --paper:#121918; --surface:#1A2322; --ink:#E4ECE8; --muted:#9DACA7; --rule:#2B3836; --empty:#2C3735; --bad:#F0A35E; --focus:#E3B04B; color-scheme:dark; }
+}
+:root[data-theme="dark"]{ --paper:#121918; --surface:#1A2322; --ink:#E4ECE8; --muted:#9DACA7; --rule:#2B3836; --empty:#2C3735; --bad:#F0A35E; --focus:#E3B04B; color-scheme:dark; }
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0; background:var(--paper); color:var(--ink); font-family:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; line-height:1.5}
+.wrap{max-width:74rem; margin:0 auto; padding:1.5rem 1.25rem 3rem}
+header h1{font-size:clamp(2.2rem,6vw,3.6rem); font-weight:800; letter-spacing:-0.03em; line-height:1; margin:0 0 .5rem}
+header p{max-width:46rem; margin:0; color:var(--muted)}
+.layout{display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); gap:2rem; margin-top:1.5rem; align-items:start}
+@media (max-width:56rem){ .layout{grid-template-columns:minmax(0,1fr)} }
+h2{font-size:1.15rem; font-weight:800; margin:0 0 .5rem}
+.card{background:var(--surface); border:1px solid var(--rule); border-radius:14px; padding:1rem}
+svg{display:block; width:100%; height:auto; touch-action:manipulation; user-select:none}
+.region{stroke:var(--ink); stroke-width:1.5; cursor:pointer; outline:none}
+.region:focus-visible{stroke:var(--focus); stroke-width:4}
+.region.bad{stroke:var(--bad); stroke-width:5; stroke-dasharray:8 4}
+.rlabel{font:700 15px "Bricolage Grotesque",system-ui,sans-serif; fill:var(--ink); text-anchor:middle; dominant-baseline:central; pointer-events:none}
+.rlabel.on{fill:#fff}
+.edge{stroke:var(--muted); stroke-width:2}
+.edge.bad{stroke:var(--bad); stroke-width:5; stroke-dasharray:8 5}
+.node{stroke:var(--ink); stroke-width:1.5; cursor:pointer}
+.choose{display:flex; flex-wrap:wrap; gap:.5rem 1.5rem; align-items:center; margin:1.2rem 0 0}
+.choose .grp{display:flex; gap:.4rem; align-items:center; font-weight:600}
+.choose button{appearance:none; font:inherit; font-weight:600; padding:.4rem .9rem; border-radius:10px; border:1.5px solid var(--rule); background:var(--surface); color:var(--ink); cursor:pointer}
+.choose button[aria-pressed="true"]{background:var(--ink); color:var(--paper); border-color:var(--ink)}
+.layout.wide{grid-template-columns:minmax(0,1fr)}
+.layout.wide .gside{display:none}
+.mnode{stroke:var(--ink); stroke-width:1.5; cursor:pointer}
+.mnode.bad{stroke:var(--bad); stroke-width:5; stroke-dasharray:7 4}
+.mnode.current{stroke:var(--focus); stroke-width:6}
+.mlabel{font:700 12px "Bricolage Grotesque",system-ui,sans-serif; fill:var(--ink); text-anchor:middle; dominant-baseline:central; pointer-events:none}
+.mlabel.on{fill:#fff}
+.palette{display:flex; flex-wrap:wrap; gap:.5rem; margin:.9rem 0 .4rem; align-items:center}
+.palette span{font-weight:600; margin-right:.2rem}
+.swatch{appearance:none; font:inherit; font-weight:600; display:flex; align-items:center; gap:.45rem; padding:.45rem .8rem; border-radius:999px; border:1.5px solid var(--rule); background:var(--surface); color:var(--ink); cursor:pointer}
+.swatch i{width:1rem; height:1rem; border-radius:50%; display:inline-block; border:1px solid var(--ink)}
+.swatch[hidden]{display:none}
+.swatch[aria-pressed="true"]{border-color:var(--ink); box-shadow:0 0 0 2px var(--ink) inset}
+.swatch:focus-visible,.btn:focus-visible,summary:focus-visible{outline:3px solid var(--focus); outline-offset:2px}
+.btn{appearance:none; font:inherit; font-weight:600; cursor:pointer; border:1.5px solid var(--rule); background:transparent; color:var(--ink); border-radius:12px; padding:.45rem .9rem}
+.hint{color:var(--muted); font-size:.92rem; margin:.3rem 0 0}
+.status{font-size:1.2rem; font-weight:800; margin:1rem 0 .3rem}
+.status.win{color:var(--verde)}
+.sub{color:var(--muted); margin:0 0 1rem}
+.formal{margin-top:1.5rem}
+.formal dl{display:grid; grid-template-columns:auto 1fr; gap:.4rem 1rem; margin:0 0 .8rem}
+.formal dt{font-weight:700} .formal dd{margin:0}
+.chips{display:flex; flex-wrap:wrap; gap:.4rem}
+.chip{font-variant-numeric:tabular-nums; border-radius:8px; padding:.25rem .55rem; border:1px solid var(--rule); background:var(--surface); font-weight:600}
+.chip.ok{border-color:var(--verde)} .chip.ok::after{content:" ✓"; color:var(--verde)}
+.chip.violada{border-color:var(--bad); color:var(--bad)} .chip.violada::after{content:" ✗"}
+.chip.pendiente{color:var(--muted)}
+.keys{color:var(--muted); font-size:.9rem; margin:.5rem 0 0}
+details{border-top:1px solid var(--rule); padding-top:1rem; margin-top:1.5rem}
+summary{cursor:pointer; font-weight:800; font-size:1.1rem}
+details li{margin-bottom:.35rem}
+
+/* agente */
+.agent{margin-top:2rem; border-top:1px solid var(--rule); padding-top:1.5rem}
+.agent h2.sec{font-size:clamp(1.5rem,4vw,2rem); margin-bottom:.4rem}
+.agent .lead{max-width:48rem; color:var(--muted); margin:0 0 1rem}
+.agrid{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:1.5rem}
+@media (max-width:56rem){ .agrid{grid-template-columns:minmax(0,1fr)} }
+.toggles{display:flex; flex-wrap:wrap; gap:.4rem 1.2rem; margin:.2rem 0 .9rem}
+.toggles label{display:flex; gap:.45rem; align-items:flex-start; font-weight:600}
+.toggles small{display:block; font-weight:400; color:var(--muted)}
+.toggles input{margin-top:.3rem; accent-color:var(--azul)}
+.abtns{display:flex; flex-wrap:wrap; gap:.5rem; margin-bottom:1rem}
+.btn.primary{background:var(--ink); color:var(--paper); border-color:var(--ink)}
+.stats{display:grid; grid-template-columns:repeat(3,1fr); gap:.6rem}
+.stat{background:var(--surface); border:1px solid var(--rule); border-radius:12px; padding:.6rem .8rem}
+.stat b{display:block; font-size:1.8rem; font-variant-numeric:tabular-nums; line-height:1.1}
+.stat span{color:var(--muted); font-size:.9rem}
+.astatus{font-weight:800; font-size:1.1rem; margin:1rem 0 .3rem}
+ol.log{background:var(--surface); border:1px solid var(--rule); border-radius:12px; max-height:16rem; overflow:auto; margin:0; padding:.6rem .6rem .6rem 2.4rem; font-variant-numeric:tabular-nums}
+ol.log li{padding:.1rem 0}
+ol.log li.reject{color:var(--muted)}
+ol.log li.backtrack{color:var(--bad); font-weight:600}
+ol.log li.assign{font-weight:600}
+ol.log li.fixed{font-style:italic; color:var(--muted)}
+.region.current{stroke:var(--focus); stroke-width:6}
+.node.current{stroke:var(--focus); stroke-width:6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Colorea el mapa</h1>
+    <p>Un problema de satisfacción de restricciones: cada región es una variable, los colores son su dominio y dos regiones vecinas no pueden tener el mismo color. Elige un color y toca las regiones del mapa o los nodos del grafo.</p>
+  </header>
+
+  <div class="choose">
+    <div class="grp" role="group" aria-label="Mapa">Mapa: <button type="button" data-map="australia" aria-pressed="true">Australia</button><button type="button" data-map="mexico" aria-pressed="false">México</button></div>
+    <div class="grp" role="group" aria-label="Número de colores">Colores: <button type="button" data-n="3" aria-pressed="true">3</button><button type="button" data-n="4" aria-pressed="false">4</button></div>
+  </div>
+
+  <div class="layout" id="layout">
+    <section aria-label="Mapa">
+      <div class="card"><svg id="map" viewBox="0 0 570 500" role="img" aria-label="Mapa de Australia por estados"></svg></div>
+      <div class="palette" role="group" aria-label="Color">
+        <span>Color:</span>
+        <button class="swatch" type="button" data-c="rojo" aria-pressed="true"><i style="background:var(--rojo)"></i>Rojo</button>
+        <button class="swatch" type="button" data-c="verde" aria-pressed="false"><i style="background:var(--verde)"></i>Verde</button>
+        <button class="swatch" type="button" data-c="azul" aria-pressed="false"><i style="background:var(--azul)"></i>Azul</button>
+        <button class="swatch" type="button" data-c="amarillo" aria-pressed="false" hidden><i style="background:var(--amarillo)"></i>Amarillo</button>
+        <button class="swatch" type="button" data-c="" aria-pressed="false"><i style="background:var(--empty)"></i>Sin color</button>
+        <button class="btn" type="button" id="clear">Borrar todo</button>
+      </div>
+      <p class="hint">Las regiones con borde naranja punteado violan una restricción.</p>
+    </section>
+
+    <section aria-label="Grafo de restricciones y estado">
+      <div class="gside">
+      <h2>El grafo de restricciones</h2>
+      <div class="card"><svg id="graph" viewBox="0 0 480 470" role="img" aria-label="Grafo de restricciones"></svg></div>
+      <p class="keys">Cada nodo es una variable; cada arista, una restricción entre dos vecinos.</p>
+      </div>
+      <p class="status" id="status" aria-live="polite"></p>
+      <p class="sub" id="sub"></p>
+    </section>
+  </div>
+
+
+  <section class="agent" aria-label="El agente">
+    <h2 class="sec">El agente: búsqueda con backtracking</h2>
+    <p class="lead">El agente colorea el mapa solo: elige una región, prueba los colores en orden y, si se queda sin opciones, retrocede. Respeta los colores que tú ya pusiste. Prueba primero desde cero, y luego fija V en azul o WA en rojo y V en verde. En México, con muchos pasos, usa “Resolver de inmediato”.</p>
+    <div class="agrid">
+      <div>
+        <div class="toggles" role="group" aria-label="Heurísticas">
+          <label><input type="checkbox" id="hMRV"><span>MRV<small>la región con menos colores posibles</small></span></label>
+          <label><input type="checkbox" id="hDeg"><span>Grado<small>la que tiene más vecinos sin colorear</small></span></label>
+          <label><input type="checkbox" id="hLCV"><span>LCV<small>el color que menos opciones les quita a los vecinos</small></span></label>
+        </div>
+        <div class="abtns">
+          <button class="btn primary" id="aStep" type="button">Siguiente paso</button>
+          <button class="btn" id="aRun" type="button">Resolver</button>
+          <button class="btn" id="aInstant" type="button">Resolver de inmediato</button>
+          <button class="btn" id="aReset" type="button">Reiniciar el agente</button>
+        </div>
+        <div class="stats">
+          <div class="stat"><b id="sAsg">0</b><span>asignaciones</span></div>
+          <div class="stat"><b id="sBack">0</b><span>retrocesos</span></div>
+          <div class="stat"><b id="sRej">0</b><span>colores rechazados</span></div>
+        </div>
+        <p class="astatus" id="aStatus" aria-live="polite">El agente espera. Toca “Siguiente paso” o “Resolver”.</p>
+      </div>
+      <div>
+        <h2>Lo que va haciendo</h2>
+        <ol class="log" id="aLog"></ol>
+      </div>
+    </div>
+  </section>
+  <section class="formal" aria-label="El problema formal">
+    <h2>El problema, como CSP</h2>
+    <dl>
+      <dt>Variables</dt><dd id="vars"></dd>
+      <dt>Dominio</dt><dd id="dom">{rojo, verde, azul} para cada variable</dd>
+      <dt>Restricciones</dt><dd><div class="chips" id="cons"></div></dd>
+    </dl>
+  </section>
+
+  <details>
+    <summary>Qué significa cada término</summary>
+    <ul>
+      <li><b>Asignación:</b> darle un valor a algunas variables, o a todas.</li>
+      <li><b>Consistente:</b> no viola ninguna restricción.</li>
+      <li><b>Completa:</b> todas las variables tienen un valor.</li>
+      <li><b>Solución:</b> una asignación completa y consistente.</li>
+      <li>Tasmania (T) no tiene vecinos: cualquier color la deja satisfecha.</li>
+    </ul>
+  </details>
+</div>
+
+<script src="csp.js"></script>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+  const fill = c => c ? `var(--${c})` : "var(--empty)";
+
+  let map = CSP.MAPS.australia;
+  let assign = {}, brush = "rojo";
+  let agent = null;          // { gen, last, done, fixed }
+  let timer = null;
+
+  /* proyección simple de longitud y latitud a la imagen */
+  const px = ([lon, lat]) => [((lon - 112) * 13).toFixed(1), ((-10 - lat) * 13.8 + 12).toFixed(1)];
+  const centroid = poly => { const p = poly.map(px).map(([x, y]) => [+x, +y]); return [p.reduce((a, q) => a + q[0], 0) / p.length, p.reduce((a, q) => a + q[1], 0) / p.length]; };
+  const NODES = { WA: [80, 200], NT: [215, 85], SA: [235, 245], Q: [370, 110], NSW: [395, 265], V: [300, 360], T: [330, 440] };
+
+  function paint(id) {
+    if (brush) assign[id] = brush; else delete assign[id];
+    resetAgent();
+  }
+
+  function render() {
+    const shown = agent && agent.last ? agent.last.assign : assign;
+    const cur = agent && agent.last && ["choose", "reject", "assign", "backtrack"].includes(agent.last.type) ? agent.last.id : null;
+    const cs = CSP.constraintStatus(map, shown);
+    const bad = new Set();
+    cs.filter(c => c.status === "violada").forEach(c => { bad.add(c.a); bad.add(c.b); });
+
+    const m = $("map"); m.innerHTML = "";
+    $("layout").classList.toggle("wide", !!map.regions[0].xy);
+    if (map.regions[0].xy) {                       // México: un grafo con posiciones aproximadas
+      m.setAttribute("viewBox", "0 0 1000 620"); m.setAttribute("aria-label", "Grafo de los estados de México");
+      const pos = {}; map.regions.forEach(r => { pos[r.id] = r.xy; });
+      cs.forEach(c => el("line", { x1: pos[c.a][0], y1: pos[c.a][1], x2: pos[c.b][0], y2: pos[c.b][1], class: "edge" + (c.status === "violada" ? " bad" : "") }, m));
+      map.regions.forEach(r => {
+        const n = el("circle", { cx: r.xy[0], cy: r.xy[1], r: 24, class: "mnode" + (bad.has(r.id) ? " bad" : "") + (cur === r.id ? " current" : ""), fill: fill(shown[r.id]), tabindex: 0, role: "button", "aria-label": `${r.name}: ${shown[r.id] || "sin color"}` }, m);
+        el("title", {}, n).textContent = r.name;
+        n.addEventListener("click", () => paint(r.id));
+        n.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); paint(r.id); } });
+        el("text", { x: r.xy[0], y: r.xy[1], class: "mlabel" + (shown[r.id] && shown[r.id] !== "amarillo" ? " on" : "") }, m).textContent = r.id;
+      });
+    } else m.setAttribute("viewBox", "0 0 570 500");
+    if (!map.regions[0].xy) map.regions.forEach(r => {
+      const pts = r.poly.map(px).map(p => p.join(",")).join(" ");
+      const g = el("polygon", { points: pts, class: "region" + (bad.has(r.id) ? " bad" : "") + (cur === r.id ? " current" : ""), fill: fill(shown[r.id]), tabindex: 0, role: "button",
+        "aria-label": `${r.name} (${r.id}): ${shown[r.id] || "sin color"}` }, m);
+      g.addEventListener("click", () => paint(r.id));
+      g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); paint(r.id); } });
+      const [cx, cy] = centroid(r.poly);
+      el("text", { x: cx, y: cy, class: "rlabel" + (shown[r.id] ? " on" : "") }, m).textContent = r.id;
+    });
+
+    const gr = $("graph"); gr.innerHTML = "";
+    if (!map.regions[0].xy) {
+    cs.forEach(c => { const [x1, y1] = NODES[c.a], [x2, y2] = NODES[c.b];
+      el("line", { x1, y1, x2, y2, class: "edge" + (c.status === "violada" ? " bad" : "") }, gr); });
+    map.regions.forEach(r => {
+      const [x, y] = NODES[r.id];
+      const n = el("circle", { cx: x, cy: y, r: 30, class: "node" + (cur === r.id ? " current" : ""), fill: fill(shown[r.id]) }, gr);
+      n.addEventListener("click", () => paint(r.id));
+      el("text", { x, y, class: "rlabel" + (shown[r.id] ? " on" : "") }, gr).textContent = r.id;
+    });
+    }
+
+    $("cons").innerHTML = cs.map(c => `<span class="chip ${c.status}" title="${c.status}">${c.a} ≠ ${c.b}</span>`).join("");
+    const s = CSP.summary(map, shown);
+    const st = $("status");
+    st.className = "status" + (s.solution ? " win" : "");
+    if (s.solution) st.textContent = "¡Solución! La asignación es completa y consistente.";
+    else if (s.violated) st.textContent = `${s.violated === 1 ? "Una restricción violada" : s.violated + " restricciones violadas"}: hay vecinos del mismo color.`;
+    else if (s.assigned === 0) st.textContent = "Elige un color y empieza a colorear.";
+    else st.textContent = "Consistente hasta ahora, pero incompleta.";
+    $("sub").textContent = `Regiones con color: ${s.assigned} de ${s.total}. Restricciones cumplidas: ${cs.filter(c => c.status === "ok").length} de ${s.constraints}.`;
+  }
+
+  function setMap(id) {
+    map = CSP.MAPS[id]; assign = {};
+    $("vars").textContent = map.regions.map(r => r.id).join(", ");
+    document.querySelectorAll("[data-map]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.map === id)));
+    resetAgent();
+  }
+  function setColors(n) {
+    CSP.setDomain(n);
+    document.querySelectorAll("[data-n]").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.n === n)));
+    document.querySelector('.swatch[data-c="amarillo"]').hidden = n < 4;
+    if (n < 4) { Object.keys(assign).forEach(k => { if (assign[k] === "amarillo") delete assign[k]; }); if (brush === "amarillo") document.querySelector('.swatch[data-c="rojo"]').click(); }
+    $("dom").textContent = `{${CSP.COLORS.join(", ")}} para cada variable`;
+    resetAgent();
+  }
+  document.querySelectorAll("[data-map]").forEach(b => b.addEventListener("click", () => setMap(b.dataset.map)));
+  document.querySelectorAll("[data-n]").forEach(b => b.addEventListener("click", () => setColors(+b.dataset.n)));
+  $("vars").textContent = map.regions.map(r => r.id).join(", ");
+  document.querySelectorAll(".swatch").forEach(b => b.addEventListener("click", () => {
+    brush = b.dataset.c;
+    document.querySelectorAll(".swatch").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  }));
+  $("clear").addEventListener("click", () => { assign = {}; resetAgent(); });
+  /* ---------- el agente ---------- */
+  const opts = () => ({ mrv: $("hMRV").checked, degree: $("hDeg").checked, lcv: $("hLCV").checked });
+  const LOG = {
+    choose: e => `Elige ${e.id}` + (opts().mrv ? ` (tiene ${e.legal} ${e.legal === 1 ? "color posible" : "colores posibles"})` : ""),
+    reject: e => `Prueba ${e.id} = ${e.value}: no, ${e.clash} ya es ${e.value}`,
+    assign: e => `Asigna ${e.id} = ${e.value}`,
+    backtrack: e => `Retrocede: quita ${e.id} = ${e.value}`,
+    solution: () => "¡Solución encontrada!",
+    failure: e => "No hay solución" + (e.reason ? `: ${e.reason}` : Object.keys(assign).length ? " con los colores que fijaste" : ` con ${CSP.COLORS.length} colores`),
+  };
+  function resetAgent() {
+    if (timer) { clearInterval(timer); timer = null; $("aRun").textContent = "Resolver"; }
+    agent = null; $("aLog").innerHTML = "";
+    ["sAsg", "sBack", "sRej"].forEach(id => { $(id).textContent = "0"; });
+    $("aStatus").textContent = "El agente espera. Toca “Siguiente paso” o “Resolver”.";
+    render();
+  }
+  function step() {
+    if (!agent) {
+      agent = { gen: CSP.backtracking(map, assign, opts()), last: null, done: false };
+      const fx = map.order.filter(id => assign[id]).map(id => `${id} = ${assign[id]}`);
+      const li = document.createElement("li"); li.className = "fixed";
+      li.textContent = fx.length ? `Tus colores fijos: ${fx.join(", ")}` : "Empieza desde cero, sin colores fijos";
+      $("aLog").appendChild(li);
+    }
+    if (agent.done) return false;
+    const r = agent.gen.next();
+    if (r.done) { agent.done = true; return false; }
+    const e = r.value; agent.last = e;
+    const li = document.createElement("li"); li.className = e.type; li.textContent = LOG[e.type](e);
+    $("aLog").appendChild(li); $("aLog").scrollTop = $("aLog").scrollHeight;
+    $("sAsg").textContent = e.stats.assignments; $("sBack").textContent = e.stats.backtracks; $("sRej").textContent = e.stats.rejected;
+    if (e.type === "solution" || e.type === "failure") {
+      agent.done = true;
+      $("aStatus").textContent = e.type === "solution" ? "¡Solución! Completa y consistente." : LOG.failure(e) + ".";
+      if (timer) { clearInterval(timer); timer = null; $("aRun").textContent = "Resolver"; }
+    } else $("aStatus").textContent = LOG[e.type](e);
+    render();
+    return !agent.done;
+  }
+  $("aStep").addEventListener("click", () => { if (timer) return; step(); });
+  $("aRun").addEventListener("click", () => {
+    if (timer) { clearInterval(timer); timer = null; $("aRun").textContent = "Resolver"; return; }
+    if (agent && agent.done) resetAgent();
+    $("aRun").textContent = "Pausa";
+    timer = setInterval(() => { if (!step()) { clearInterval(timer); timer = null; $("aRun").textContent = "Resolver"; } }, map.regions.length > 10 ? 50 : 180);
+  });
+  $("aInstant").addEventListener("click", () => {
+    resetAgent();
+    const r = CSP.solve(map, assign, opts(), 3000000);
+    agent = { gen: null, last: r, done: true };
+    const li = document.createElement("li"); li.className = r.type === "solution" ? "assign" : "backtrack";
+    li.textContent = r.type === "solution" ? "¡Solución encontrada!" : r.type === "giveup" ? "El agente se rindió: demasiados pasos" : LOG.failure(r);
+    $("aLog").appendChild(li);
+    $("sAsg").textContent = r.stats.assignments.toLocaleString("es-MX"); $("sBack").textContent = r.stats.backtracks.toLocaleString("es-MX"); $("sRej").textContent = r.stats.rejected.toLocaleString("es-MX");
+    $("aStatus").textContent = r.type === "solution" ? "¡Solución! Completa y consistente." : li.textContent + ".";
+    render();
+  });
+  $("aReset").addEventListener("click", resetAgent);
+  ["hMRV", "hDeg", "hLCV"].forEach(id => $(id).addEventListener("change", resetAgent));
+
+  render();
+})();
+</script>
+</body>
+</html>
