@@ -16,11 +16,14 @@ Un CSP para colorear el mapa de Australia, como en las láminas del curso, o el 
 
 - **México:** sus 32 estados como grafo, con cada estado en su posición aproximada y sus 69 fronteras. Se puede usar un dominio de 3 o 4 colores. Con 3 colores no hay solución: hay grupos de cuatro estados vecinos todos entre sí, como Hidalgo, Estado de México, Tlaxcala y Puebla. Para demostrarlo, el agente retrocede 717 veces sin heurísticas, 13,200 solo con la de grado y apenas 15 con MRV y grado juntas.
 
-Próximamente: forward checking y AC-3; las N reinas en Prolog y Python.
+- **Inferencia:** el agente puede propagar restricciones con forward checking o con AC-3, y debajo de cada región se ven los colores que todavía le quedan. En el ejemplo de la lámina 26 del curso (WA en rojo y Q en verde), sin inferencia el agente retrocede 7 veces, con forward checking 1 vez, y AC-3 detecta que no hay solución antes de asignar nada. En México con 3 colores: 717 retrocesos sin inferencia, 549 con forward checking y 45 con AC-3.
 
-## Presentación
+Próximamente: las N reinas en Prolog y Python.
 
-`presentaciones/1_csp_laboratorio.pdf`: cómo usar la página y la tarea.
+## Presentaciones
+
+1. `presentaciones/1_csp_laboratorio.pdf`: colorear el mapa, el agente con backtracking y las heurísticas; la tarea.
+2. `presentaciones/2_csp_forward_checking.pdf`: forward checking y AC-3; la tarea.
 
 ## Archivos
 
@@ -28,7 +31,7 @@ Próximamente: forward checking y AC-3; las N reinas en Prolog y Python.
 csp/
 ├── index.html        la página
 ├── csp.js            los mapas, las restricciones y el agente
-└── presentaciones/   la presentación en PDF
+└── presentaciones/   las presentaciones en PDF
 ```
 
 Para usarla sin internet basta con abrir `index.html` en el navegador.

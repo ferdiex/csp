@@ -96,6 +96,13 @@ ol.log li.reject{color:var(--muted)}
 ol.log li.backtrack{color:var(--bad); font-weight:600}
 ol.log li.assign{font-weight:600}
 ol.log li.fixed{font-style:italic; color:var(--muted)}
+ol.log li.prune{color:var(--azul)}
+ol.log li.wipeout{color:var(--bad); font-weight:700}
+.infer{display:flex; flex-wrap:wrap; gap:.4rem; align-items:center; margin:.2rem 0 .9rem; font-weight:600}
+.infer button{appearance:none; font:inherit; font-weight:600; padding:.4rem .8rem; border-radius:10px; border:1.5px solid var(--rule); background:var(--surface); color:var(--ink); cursor:pointer}
+.infer button[aria-pressed="true"]{background:var(--ink); color:var(--paper); border-color:var(--ink)}
+.stats{grid-template-columns:repeat(4,1fr)}
+@media (max-width:30rem){ .stats{grid-template-columns:repeat(2,1fr)} }
 .region.current{stroke:var(--focus); stroke-width:6}
 .node.current{stroke:var(--focus); stroke-width:6}
 </style>
@@ -141,9 +148,14 @@ ol.log li.fixed{font-style:italic; color:var(--muted)}
 
   <section class="agent" aria-label="El agente">
     <h2 class="sec">El agente: búsqueda con backtracking</h2>
-    <p class="lead">El agente colorea el mapa solo: elige una región, prueba los colores en orden y, si se queda sin opciones, retrocede. Respeta los colores que tú ya pusiste. Prueba primero desde cero, y luego fija V en azul o WA en rojo y V en verde. En México, con muchos pasos, usa “Resolver de inmediato”.</p>
+    <p class="lead">El agente colorea el mapa solo: elige una región, prueba los colores en orden y, si se queda sin opciones, retrocede. Respeta los colores que tú ya pusiste. Prueba primero desde cero, y luego fija V en azul o WA en rojo y V en verde. En México, con muchos pasos, usa “Resolver de inmediato”. Con <b>forward checking</b> o <b>AC-3</b>, debajo de cada región se ven los colores que todavía le quedan.</p>
     <div class="agrid">
       <div>
+        <div class="infer" role="group" aria-label="Inferencia">Inferencia:
+          <button type="button" data-inf="none" aria-pressed="true">Ninguna</button>
+          <button type="button" data-inf="fc" aria-pressed="false">Forward checking</button>
+          <button type="button" data-inf="ac3" aria-pressed="false">AC-3</button>
+        </div>
         <div class="toggles" role="group" aria-label="Heurísticas">
           <label><input type="checkbox" id="hMRV"><span>MRV<small>la región con menos colores posibles</small></span></label>
           <label><input type="checkbox" id="hDeg"><span>Grado<small>la que tiene más vecinos sin colorear</small></span></label>
@@ -159,6 +171,7 @@ ol.log li.fixed{font-style:italic; color:var(--muted)}
           <div class="stat"><b id="sAsg">0</b><span>asignaciones</span></div>
           <div class="stat"><b id="sBack">0</b><span>retrocesos</span></div>
           <div class="stat"><b id="sRej">0</b><span>colores rechazados</span></div>
+          <div class="stat"><b id="sPr">0</b><span>colores tachados</span></div>
         </div>
         <p class="astatus" id="aStatus" aria-live="polite">El agente espera. Toca “Siguiente paso” o “Resolver”.</p>
       </div>
@@ -214,7 +227,10 @@ ol.log li.fixed{font-style:italic; color:var(--muted)}
 
   function render() {
     const shown = agent && agent.last ? agent.last.assign : assign;
-    const cur = agent && agent.last && ["choose", "reject", "assign", "backtrack"].includes(agent.last.type) ? agent.last.id : null;
+    const cur = agent && agent.last && ["choose", "reject", "assign", "backtrack", "prune", "wipeout"].includes(agent.last.type) ? agent.last.id : null;
+    const doms = agent && agent.last && agent.last.domains && inference !== "none" ? agent.last.domains : null;
+    const domDots = (parent, id, x, y, rr) => { if (!doms || !doms[id]) return;
+      const d = doms[id], w = rr * 2.6; d.forEach((c, i) => el("circle", { cx: x - (d.length - 1) * w / 2 + i * w, cy: y, r: rr, fill: `var(--${c})`, stroke: "var(--ink)", "stroke-width": 1 }, parent)); };
     const cs = CSP.constraintStatus(map, shown);
     const bad = new Set();
     cs.filter(c => c.status === "violada").forEach(c => { bad.add(c.a); bad.add(c.b); });
@@ -231,6 +247,7 @@ ol.log li.fixed{font-style:italic; color:var(--muted)}
         n.addEventListener("click", () => paint(r.id));
         n.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); paint(r.id); } });
         el("text", { x: r.xy[0], y: r.xy[1], class: "mlabel" + (shown[r.id] && shown[r.id] !== "amarillo" ? " on" : "") }, m).textContent = r.id;
+        domDots(m, r.id, r.xy[0], r.xy[1] + 32, 4.5);
       });
     } else m.setAttribute("viewBox", "0 0 570 500");
     if (!map.regions[0].xy) map.regions.forEach(r => {
@@ -252,6 +269,7 @@ ol.log li.fixed{font-style:italic; color:var(--muted)}
       const n = el("circle", { cx: x, cy: y, r: 30, class: "node" + (cur === r.id ? " current" : ""), fill: fill(shown[r.id]) }, gr);
       n.addEventListener("click", () => paint(r.id));
       el("text", { x, y, class: "rlabel" + (shown[r.id] ? " on" : "") }, gr).textContent = r.id;
+      domDots(gr, r.id, x, y + 40, 6);
     });
     }
 
@@ -289,19 +307,22 @@ ol.log li.fixed{font-style:italic; color:var(--muted)}
   }));
   $("clear").addEventListener("click", () => { assign = {}; resetAgent(); });
   /* ---------- el agente ---------- */
-  const opts = () => ({ mrv: $("hMRV").checked, degree: $("hDeg").checked, lcv: $("hLCV").checked });
+  let inference = "none";
+  const opts = () => ({ mrv: $("hMRV").checked, degree: $("hDeg").checked, lcv: $("hLCV").checked, inference });
   const LOG = {
     choose: e => `Elige ${e.id}` + (opts().mrv ? ` (tiene ${e.legal} ${e.legal === 1 ? "color posible" : "colores posibles"})` : ""),
     reject: e => `Prueba ${e.id} = ${e.value}: no, ${e.clash} ya es ${e.value}`,
     assign: e => `Asigna ${e.id} = ${e.value}`,
     backtrack: e => `Retrocede: quita ${e.id} = ${e.value}`,
+    prune: e => e.how === "fc" ? `Forward checking: como ${e.by} es ${e.value === undefined ? "" : e.value}, tacha ${e.value} de ${e.id}` : `AC-3: tacha ${e.value} de ${e.id} (ningún color de ${e.by} es compatible)`,
+    wipeout: e => `${e.id} se quedó sin colores`,
     solution: () => "¡Solución encontrada!",
     failure: e => "No hay solución" + (e.reason ? `: ${e.reason}` : Object.keys(assign).length ? " con los colores que fijaste" : ` con ${CSP.COLORS.length} colores`),
   };
   function resetAgent() {
     if (timer) { clearInterval(timer); timer = null; $("aRun").textContent = "Resolver"; }
     agent = null; $("aLog").innerHTML = "";
-    ["sAsg", "sBack", "sRej"].forEach(id => { $(id).textContent = "0"; });
+    ["sAsg", "sBack", "sRej", "sPr"].forEach(id => { $(id).textContent = "0"; });
     $("aStatus").textContent = "El agente espera. Toca “Siguiente paso” o “Resolver”.";
     render();
   }
@@ -319,7 +340,7 @@ ol.log li.fixed{font-style:italic; color:var(--muted)}
     const e = r.value; agent.last = e;
     const li = document.createElement("li"); li.className = e.type; li.textContent = LOG[e.type](e);
     $("aLog").appendChild(li); $("aLog").scrollTop = $("aLog").scrollHeight;
-    $("sAsg").textContent = e.stats.assignments; $("sBack").textContent = e.stats.backtracks; $("sRej").textContent = e.stats.rejected;
+    $("sAsg").textContent = e.stats.assignments; $("sBack").textContent = e.stats.backtracks; $("sRej").textContent = e.stats.rejected; $("sPr").textContent = e.stats.pruned;
     if (e.type === "solution" || e.type === "failure") {
       agent.done = true;
       $("aStatus").textContent = e.type === "solution" ? "¡Solución! Completa y consistente." : LOG.failure(e) + ".";
@@ -342,12 +363,17 @@ ol.log li.fixed{font-style:italic; color:var(--muted)}
     const li = document.createElement("li"); li.className = r.type === "solution" ? "assign" : "backtrack";
     li.textContent = r.type === "solution" ? "¡Solución encontrada!" : r.type === "giveup" ? "El agente se rindió: demasiados pasos" : LOG.failure(r);
     $("aLog").appendChild(li);
-    $("sAsg").textContent = r.stats.assignments.toLocaleString("es-MX"); $("sBack").textContent = r.stats.backtracks.toLocaleString("es-MX"); $("sRej").textContent = r.stats.rejected.toLocaleString("es-MX");
+    $("sAsg").textContent = r.stats.assignments.toLocaleString("es-MX"); $("sBack").textContent = r.stats.backtracks.toLocaleString("es-MX"); $("sRej").textContent = r.stats.rejected.toLocaleString("es-MX"); $("sPr").textContent = r.stats.pruned.toLocaleString("es-MX");
     $("aStatus").textContent = r.type === "solution" ? "¡Solución! Completa y consistente." : li.textContent + ".";
     render();
   });
   $("aReset").addEventListener("click", resetAgent);
   ["hMRV", "hDeg", "hLCV"].forEach(id => $(id).addEventListener("change", resetAgent));
+  document.querySelectorAll("[data-inf]").forEach(b => b.addEventListener("click", () => {
+    inference = b.dataset.inf;
+    document.querySelectorAll("[data-inf]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    resetAgent();
+  }));
 
   render();
 })();

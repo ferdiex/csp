@@ -115,31 +115,95 @@
     return COLORS.slice().sort((a, b) => ruledOut(a) - ruledOut(b) || COLORS.indexOf(a) - COLORS.indexOf(b));
   }
 
+  /* ---------- Inferencia: forward checking y AC-3 ----------
+   * domains: { región: [colores que todavía puede tomar] }. Cada función
+   * va entregando lo que tacha y regresa false si algún dominio se vacía. */
+  function* forwardCheck(map, assign, domains, id, stats) {
+    for (const n of neighbors(map, id)) {
+      if (assign[n]) continue;
+      const v = assign[id];
+      if (domains[n].includes(v)) {
+        domains[n] = domains[n].filter(c => c !== v); stats.pruned++;
+        yield { type: "prune", id: n, value: v, by: id, how: "fc" };
+        if (!domains[n].length) { yield { type: "wipeout", id: n }; return false; }
+      }
+    }
+    return true;
+  }
+  function* ac3(map, domains, queue, stats) {
+    while (queue.length) {
+      const [x, y] = queue.shift();
+      let changed = false;
+      for (const vx of domains[x].slice()) {
+        if (!domains[y].some(vy => vy !== vx)) {                  // ningún valor de y es compatible
+          domains[x] = domains[x].filter(c => c !== vx); stats.pruned++; changed = true;
+          yield { type: "prune", id: x, value: vx, by: y, how: "ac3" };
+        }
+      }
+      if (changed) {
+        if (!domains[x].length) { yield { type: "wipeout", id: x }; return false; }
+        for (const z of neighbors(map, x)) if (z !== y) queue.push([z, x]);
+      }
+    }
+    return true;
+  }
+  const arcsInto = (map, id) => neighbors(map, id).map(n => [n, id]);
+  const allArcs = map => map.edges.flatMap(([a, b]) => [[a, b], [b, a]]);
+  const copyDomains = d => Object.fromEntries(Object.entries(d).map(([k, v]) => [k, v.slice()]));
+
   /* El backtracking como generador: entrega un evento a la vez para poder mostrarlo.
-   * fixed son los colores que puso el alumno: el agente los respeta. */
+   * fixed son los colores que puso el alumno: el agente los respeta.
+   * opts.inference: "none", "fc" o "ac3". */
   function* backtracking(map, fixed, opts) {
+    const inf = opts.inference || "none";
     const assign = Object.assign({}, fixed);
-    const stats = { assignments: 0, backtracks: 0, rejected: 0 };
-    const ev = (type, extra) => Object.assign({ type, assign: Object.assign({}, assign), stats: Object.assign({}, stats) }, extra);
+    let domains = Object.fromEntries(map.regions.map(r => [r.id, fixed[r.id] ? [fixed[r.id]] : COLORS.slice()]));
+    const stats = { assignments: 0, backtracks: 0, rejected: 0, pruned: 0 };
+    const ev = (e) => Object.assign(e, { assign: Object.assign({}, assign), domains: copyDomains(domains), stats: Object.assign({}, stats) });
+    const pass = function* (g) { let r; while (!(r = g.next()).done) yield ev(r.value); return r.value; };
     for (const [a, b] of map.edges)
-      if (fixed[a] && fixed[a] === fixed[b]) { yield ev("failure", { reason: "tus colores ya violan una restricción" }); return; }
+      if (fixed[a] && fixed[a] === fixed[b]) { yield ev({ type: "failure", reason: "tus colores ya violan una restricción" }); return; }
+    // propagar desde los colores fijos antes de buscar
+    if (inf === "fc") { for (const id of Object.keys(fixed)) if (!(yield* pass(forwardCheck(map, assign, domains, id, stats)))) { yield ev({ type: "failure" }); return; } }
+    if (inf === "ac3") { if (!(yield* pass(ac3(map, domains, allArcs(map), stats)))) { yield ev({ type: "failure" }); return; } }
+    const remaining = id => (inf === "none" ? legalValues(map, assign, id) : domains[id]);
+    function choose() {
+      const free = map.order.filter(id => !assign[id]);
+      const degree = id => neighbors(map, id).filter(n => !assign[n]).length;
+      let best = free[0];
+      for (const id of free) {
+        if (opts.mrv) { const d = remaining(id).length - remaining(best).length; if (d < 0 || (d === 0 && opts.degree && degree(id) > degree(best))) best = id; }
+        else if (opts.degree && degree(id) > degree(best)) best = id;
+      }
+      return best;
+    }
+    function values(id) {
+      const vals = inf === "none" ? COLORS.slice() : domains[id].slice();
+      if (!opts.lcv) return vals;
+      const ruledOut = c => neighbors(map, id).filter(n => !assign[n] && remaining(n).includes(c)).length;
+      return vals.sort((a, b) => ruledOut(a) - ruledOut(b) || COLORS.indexOf(a) - COLORS.indexOf(b));
+    }
     function* search() {
       if (map.regions.every(r => assign[r.id])) return true;
-      const id = selectVariable(map, assign, opts);
-      yield ev("choose", { id, legal: legalValues(map, assign, id).length });
-      for (const c of orderValues(map, assign, id, opts)) {
+      const id = choose();
+      yield ev({ type: "choose", id, legal: remaining(id).length });
+      for (const c of values(id)) {
         const clash = neighbors(map, id).find(n => assign[n] === c);
-        if (clash) { stats.rejected++; yield ev("reject", { id, value: c, clash }); continue; }
-        assign[id] = c; stats.assignments++;
-        yield ev("assign", { id, value: c });
-        if (yield* search()) return true;
-        delete assign[id]; stats.backtracks++;
-        yield ev("backtrack", { id, value: c });
+        if (clash) { stats.rejected++; yield ev({ type: "reject", id, value: c, clash }); continue; }
+        const saved = copyDomains(domains);
+        assign[id] = c; domains[id] = [c]; stats.assignments++;
+        yield ev({ type: "assign", id, value: c });
+        let ok = true;
+        if (inf === "fc") ok = yield* pass(forwardCheck(map, assign, domains, id, stats));
+        if (inf === "ac3") ok = yield* pass(ac3(map, domains, arcsInto(map, id), stats));
+        if (ok && (yield* search())) return true;
+        delete assign[id]; domains = saved; stats.backtracks++;
+        yield ev({ type: "backtrack", id, value: c });
       }
       return false;
     }
     const ok = yield* search();
-    yield ev(ok ? "solution" : "failure", {});
+    yield ev({ type: ok ? "solution" : "failure" });
   }
 
   /* Correr todo el backtracking de una vez y regresar el último evento. */
