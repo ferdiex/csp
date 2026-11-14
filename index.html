@@ -170,8 +170,8 @@ ol.log li.wipeout{color:var(--bad); font-weight:700}
         <div class="stats">
           <div class="stat"><b id="sAsg">0</b><span>asignaciones</span></div>
           <div class="stat"><b id="sBack">0</b><span>retrocesos</span></div>
-          <div class="stat"><b id="sRej">0</b><span>colores rechazados</span></div>
-          <div class="stat"><b id="sPr">0</b><span>colores tachados</span></div>
+          <div class="stat"><b id="sRej">0</b><span>probados y rechazados</span></div>
+          <div class="stat"><b id="sPr">0</b><span>eliminados por propagación</span></div>
         </div>
         <p class="astatus" id="aStatus" aria-live="polite">El agente espera. Toca “Siguiente paso” o “Resolver”.</p>
       </div>
@@ -314,7 +314,7 @@ ol.log li.wipeout{color:var(--bad); font-weight:700}
     reject: e => `Prueba ${e.id} = ${e.value}: no, ${e.clash} ya es ${e.value}`,
     assign: e => `Asigna ${e.id} = ${e.value}`,
     backtrack: e => `Retrocede: quita ${e.id} = ${e.value}`,
-    prune: e => e.how === "fc" ? `Forward checking: como ${e.by} es ${e.value === undefined ? "" : e.value}, tacha ${e.value} de ${e.id}` : `AC-3: tacha ${e.value} de ${e.id} (ningún color de ${e.by} es compatible)`,
+    prune: e => e.how === "fc" ? `Forward checking: como ${e.by} es ${e.value}, elimina ${e.value} de ${e.id}` : `AC-3: elimina ${e.value} de ${e.id} (ningún color de ${e.by} es compatible)`,
     wipeout: e => `${e.id} se quedó sin colores`,
     solution: () => "¡Solución encontrada!",
     failure: e => "No hay solución" + (e.reason ? `: ${e.reason}` : Object.keys(assign).length ? " con los colores que fijaste" : ` con ${CSP.COLORS.length} colores`),

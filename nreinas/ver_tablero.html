@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ver el tablero: N reinas</title>
+<style>
+:root{ --paper:#F6F3EC; --ink:#26231E; --muted:#6E675B; --light:#EDE3CC; --dark:#B9A27A; --queen:#26231E; --bad:#B4432E; color-scheme:light; }
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --paper:#1C1A17; --ink:#EEE8DC; --muted:#A99F8C; --light:#5C5444; --dark:#3B352B; --queen:#F6F3EC; --bad:#E9826B; color-scheme:dark; } }
+:root[data-theme="dark"]{ --paper:#1C1A17; --ink:#EEE8DC; --muted:#A99F8C; --light:#5C5444; --dark:#3B352B; --queen:#F6F3EC; --bad:#E9826B; color-scheme:dark; }
+*{box-sizing:border-box}
+body{margin:0; background:var(--paper); color:var(--ink); font-family:Georgia,"Times New Roman",serif; line-height:1.5}
+main{max-width:46rem; margin:0 auto; padding:2rem 1rem 3rem}
+h1{font-weight:400; font-size:clamp(1.8rem,5vw,2.6rem); margin:0 0 .3rem}
+p{color:var(--muted); margin:0 0 1rem}
+label.file{display:inline-block; font-family:system-ui,sans-serif; font-weight:600; border:1.5px solid var(--ink); padding:.5rem .9rem; cursor:pointer}
+label.file:focus-within{outline:3px solid var(--bad); outline-offset:2px}
+input[type=file]{position:absolute; opacity:0; width:1px; height:1px}
+#info{font-family:system-ui,sans-serif; margin:1rem 0}
+#info.bad{color:var(--bad)}
+.board{display:grid; width:min(100%,32rem); aspect-ratio:1; border:2px solid var(--ink)}
+.board div{display:flex; align-items:center; justify-content:center; font-size:var(--q); color:var(--queen)}
+.board .l{background:var(--light)} .board .d{background:var(--dark)}
+.board .x{outline:3px solid var(--bad); outline-offset:-3px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Ver el tablero</h1>
+  <p>Abre un archivo <code>queensN.json</code> generado con <code>nqueens.pl</code> o <code>nqueens.py</code>. La página dibuja las reinas y comprueba que ninguna ataque a otra.</p>
+  <label class="file">Abrir JSON<input type="file" id="f" accept=".json,application/json"></label>
+  <div id="info" aria-live="polite"></div>
+  <div class="board" id="b" role="img" aria-label="Tablero"></div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+function draw(data) {
+  const n = data.n, cols = data.solution;
+  if (!Number.isInteger(n) || !Array.isArray(cols) || cols.length !== n) throw new Error("El archivo no tiene la forma {\"n\": N, \"solution\": [...]}");
+  const bad = new Set();
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++)
+    if (cols[i] === cols[j] || Math.abs(cols[i] - cols[j]) === j - i) { bad.add(i); bad.add(j); }
+  const b = $("b"); b.innerHTML = ""; b.style.gridTemplateColumns = `repeat(${n}, 1fr)`;
+  b.style.setProperty("--q", `min(${Math.floor(28 / n * 1.6 * 10) / 10}rem, 2.2rem)`);
+  b.setAttribute("aria-label", `Tablero de ${n} por ${n}, reinas en las columnas ${cols.join(", ")}`);
+  for (let r = 0; r < n; r++) for (let c = 1; c <= n; c++) {
+    const d = document.createElement("div");
+    d.className = ((r + c) % 2 ? "d" : "l") + (cols[r] === c && bad.has(r) ? " x" : "");
+    if (cols[r] === c) d.textContent = "♛";
+    b.appendChild(d);
+  }
+  $("info").className = bad.size ? "bad" : "";
+  $("info").textContent = bad.size ? `N = ${n}: hay reinas que se atacan (marcadas).` : `N = ${n}: ninguna reina ataca a otra. Columnas por fila: ${cols.join(", ")}.`;
+}
+$("f").addEventListener("change", async e => {
+  const file = e.target.files[0]; if (!file) return;
+  try { draw(JSON.parse(await file.text())); }
+  catch (err) { $("info").className = "bad"; $("info").textContent = "No se pudo leer: " + err.message; $("b").innerHTML = ""; }
+});
+draw({ n: 8, solution: [1, 5, 8, 6, 3, 7, 2, 4] });
+</script>
+</body>
+</html>
