@@ -31,7 +31,9 @@ El archivo tiene dos modelos: `build()`, con `AllDifferentConstraint` para las c
 
 ## Ver el tablero
 
-`ver_tablero.html` abre cualquier `queensN.json` de los dos programas, dibuja el tablero y comprueba que ninguna reina ataque a otra. Basta con abrirlo en el navegador.
+`ver_tablero.html` abre el JSON de cualquiera de los dos programas: una solución (`queens8.json`) o la lista de todas (`{"n": 8, "solutions": [[...], ...]}`). Dibuja el tablero, comprueba que ninguna reina ataque a otra y, con una lista, permite recorrerla con un índice (desde 0) y reporta cuántas soluciones son válidas y si hay repetidas.
+
+Se abre en línea, en https://ferdiex.github.io/csp/nreinas/ver_tablero.html, o con doble clic sobre el archivo; en ambos casos, con el botón **Abrir JSON**.
 
 ## Verificación
 
