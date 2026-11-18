@@ -75,7 +75,9 @@ function load(data) {
   const s = $("summary");
   if (many) {
     s.className = invalid || distinct < list.length ? "bad" : "ok";
-    s.textContent = `${list.length} soluciones: ${list.length - invalid} válidas` + (invalid ? `, ${invalid} con reinas que se atacan` : "") + (distinct < list.length ? `, ${list.length - distinct} repetidas` : ", ninguna repetida") + ".";
+    const pl = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+    const rep = list.length - distinct;
+    s.textContent = `${pl(list.length, "solución", "soluciones")}: ${pl(list.length - invalid, "válida", "válidas")}` + (invalid ? `, ${invalid} con reinas que se atacan` : "") + (rep ? `, ${pl(rep, "repetida", "repetidas")}` : ", ninguna repetida") + ".";
   } else { s.textContent = ""; s.className = ""; }
   show(0);
 }
